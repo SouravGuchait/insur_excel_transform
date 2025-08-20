@@ -47,7 +47,6 @@ class FileUploadView(APIView):
 
 class ProcessFileView(APIView):
     def post(self, request):
-        # 1️⃣ Get uploaded file
         upload_file = request.FILES.get("file")
         if not upload_file:
             return Response({"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
@@ -58,12 +57,11 @@ class ProcessFileView(APIView):
             for chunk in upload_file.chunks():
                 f.write(chunk)
 
-        # 2️⃣ Load raw Excel (skip first row, extract products from row 2)
         df_raw = pd.read_excel(input_path, header=None)
         df_master_path = os.path.join(settings.BASE_DIR, "master.xlsx")
         df_master = pd.read_excel(df_master_path)
 
-        # Extract Product headers from row 2, columns 2 onward
+        # Extract Product headers from row 2, columns 2
         products = df_raw.iloc[2, 1:].tolist()
         drop_products = ["Grand Total", "Growth %", "Market %", "Accretion"]
         products = [p for p in products if p not in drop_products]
@@ -80,9 +78,21 @@ class ProcessFileView(APIView):
 
         upload_log = FileUploadLog.objects.create(file_name=upload_file.name)
         # Map insurer names
+        # mapping = dict(zip(df_master["insurer"], df_master["clubbed_name"])) df.iloc[:, 0] = df.iloc[:, 0].replace(mapping)
         mapping = dict(zip(df_master["insurer"], df_master["clubbed_name"]))
         df.iloc[:, 0] = df.iloc[:, 0].replace(mapping)
 
+        # valid_insurers = set(mapping.values()) df = df[df.iloc[:, 0].isin(valid_insurers)]
+
+        # --- Pair Current vs Previous Year ---
+        # rows = [] 
+        # for i in range(0, len(df), 2): 
+        #     try: 
+        #         curr = df.iloc[i] 
+        #         prev = df.iloc[i + 1] 
+        #         insurer = curr.iloc[0] 
+        #         values_curr = curr.iloc[1:len(products)+1] 
+        #         values_prev = prev.iloc[1:len(products)+1]
         #save log
         for orig, mapped in mapping.items():
             ColumnMappingLog.objects.create(
@@ -133,6 +143,7 @@ class ProcessFileView(APIView):
 
         tidy_df.to_excel(output_path, index=False)
 
+        #Save Log
         upload_log.processed = True
         upload_log.processed_at = datetime.now()
         upload_log.processed_file_name = output_filename
@@ -148,7 +159,6 @@ class ProcessFileView(APIView):
 
 
 
-# ---------------- Download File ----------------
 class DownloadFileView(APIView):
     def get(self, request):
         filename = request.GET.get("file")
@@ -162,7 +172,7 @@ class DownloadFileView(APIView):
         return FileResponse(open(file_path, "rb"), as_attachment=True, filename=filename)
 
 
-# ---------------- Generate Plot ----------------
+
 class GeneratePlotView(APIView):
     def get(self, request):
         filename = request.GET.get("file")
