@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Excel Transformer</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1 { color: #333; }
+    input, select, button { margin: 5px 0; padding: 5px; }
+    #plotImg { max-width: 600px; margin-top: 10px; display: none; }
+  </style>
+</head>
+<body>
+  <h1>Excel Transformer</h1>
+
+  <!-- Upload Form -->
+  <form id="uploadForm" enctype="multipart/form-data">
+    <input type="file" id="fileInput" name="file" accept=".xlsx" required />
+    <button type="submit">Upload File</button>
+  </form>
+
+  <div id="uploadStatus"></div>
+
+  <!-- Process Button -->
+  <button id="processBtn" style="display:none;">Transform File</button>
+
+  <!-- Download Link -->
+  <div>
+    <a id="downloadLink" href="#" style="display:none;" download>Download Processed File</a>
+  </div>
+
+  <!-- Plot Section -->
+  <div id="plotSection" style="display:none;">
+    <h3>Generate Plot</h3>
+    <label for="plotSelect">Select Column:</label>
+    <select id="plotSelect"></select>
+    <button id="plotBtn">Generate Plot</button>
+    <br/>
+    <img id="plotImg" src="" alt="Plot" />
+  </div>
+
+  <script>
+    let uploadedFile = "";
+    let outputFile = "";
+
+    // -------- Upload File --------
+    document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fileInput = document.getElementById("fileInput");
+      if (!fileInput.files.length) return alert("Select a file!");
+
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
+
+      try {
+        const res = await axios.post("/api/upload/", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+        uploadedFile = fileInput.files[0]; // keep the file object
+        document.getElementById("uploadStatus").innerText = "File uploaded successfully!";
+        document.getElementById("processBtn").style.display = "inline-block";
+      } catch (err) {
+        console.error(err);
+        document.getElementById("uploadStatus").innerText = "Upload failed!";
+      }
+    });
+
+    // -------- Process File --------
+    document.getElementById("processBtn").addEventListener("click", async () => {
+      if (!uploadedFile) return alert("No file uploaded!");
+
+      const formData = new FormData();
+      formData.append("file", uploadedFile);
+
+      try {
+        const res = await axios.post("/api/process/", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+
+        outputFile = res.data.output_file;
+
+        // Show download link
+        const downloadLink = document.getElementById("downloadLink");
+        downloadLink.href = `/api/download/?file=${outputFile}`;
+        downloadLink.style.display = "inline-block";
+
+        // Populate plot dropdown
+        const select = document.getElementById("plotSelect");
+        select.innerHTML = "";
+        res.data.columns.forEach(col => {
+          const option = document.createElement("option");
+          option.value = col;
+          option.textContent = col;
+          select.appendChild(option);
+        });
+
+        document.getElementById("plotSection").style.display = "block";
+        alert("File transformed successfully!");
+      } catch (err) {
+        console.error(err);
+        alert("Transformation failed!");
+      }
+    });
+
+    // -------- Generate Plot --------
+    document.getElementById("plotBtn").addEventListener("click", async () => {
+      const col = document.getElementById("plotSelect").value;
+      if (!col) return alert("Select a column!");
+
+      try {
+        const res = await axios.get(`/api/plot/?file=${outputFile}&column=${col}`);
+        document.getElementById("plotImg").src = "data:image/png;base64," + res.data.plot;
+        document.getElementById("plotImg").style.display = "block";
+      } catch (err) {
+        console.error(err);
+        alert("Plot generation failed!");
+      }
+    });
+  </script>
+</body>
+</html>
